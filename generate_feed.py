@@ -41,7 +41,8 @@ for a in soup.find_all("a", href=True):
     seen.add(link)
 
     title = a.get_text(" ", strip=True)
-
+if not title:
+    continue
     if not title:
         title = link.split("/")[-1].replace("-", " ").title()
 
