@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 from datetime import datetime, timezone
 
 BASE = "https://www.counterextremism.com"
-URL = "https://www.counterextremism.com/news-and-media"
+URL = "https://www.counterextremism.com/news-and-media/eye-on-extremism"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
@@ -16,48 +16,44 @@ r.raise_for_status()
 
 soup = BeautifulSoup(r.text, "html.parser")
 
-feed = FeedGenerator()
+fg = FeedGenerator()
+fg.title("Counter Extremism Project - Eye on Extremism")
+fg.link(href=URL)
+fg.description("Daily Eye on Extremism updates")
+fg.language("en")
 
-feed.title("Counter Extremism Project News")
-feed.link(href=URL)
-feed.description("Latest news from the Counter Extremism Project")
-feed.language("en")
-
-found = set()
+seen = set()
 count = 0
 
-# Find headings and nearby article links
-for tag in soup.find_all(["h1", "h2", "h3", "h4"]):
+for a in soup.find_all("a", href=True):
 
-    link = tag.find("a", href=True)
+    href = a["href"]
 
-    if not link:
+    if "/eye-extremism-" not in href:
         continue
 
-    title = link.get_text(" ", strip=True)
-    href = link["href"]
+    link = urljoin(BASE, href)
 
-    if len(title) < 5:
+    if link in seen:
         continue
 
-    url = urljoin(BASE, href)
+    seen.add(link)
 
-    if url in found:
-        continue
+    title = a.get_text(" ", strip=True)
 
-    found.add(url)
+    if not title:
+        title = href.split("/")[-1].replace("-", " ").title()
 
-    item = feed.add_entry()
-    item.title(title)
-    item.link(href=url)
-    item.guid(url)
-    item.description(
-        "Counter Extremism Project article"
-    )
+    entry = fg.add_entry()
+    entry.title(title)
+    entry.link(href=link)
+    entry.guid(link, permalink=True)
+    entry.description(title)
+    entry.pubDate(datetime.now(timezone.utc))
 
     count += 1
 
-print("FOUND ARTICLES:", count)
+print(f"FOUND ARTICLES: {count}")
 
-feed.lastBuildDate(datetime.now(timezone.utc))
-feed.rss_file("feed.xml")
+fg.lastBuildDate(datetime.now(timezone.utc))
+fg.rss_file("feed.xml")
