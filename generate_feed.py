@@ -2,30 +2,40 @@ import requests
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from urllib.parse import urljoin
-from datetime import datetime
+from datetime import datetime, timezone
 from email.utils import format_datetime
 import re
 
 BASE = "https://www.counterextremism.com"
-URL = "https://www.counterextremism.com/news-and-media/eye-on-extremism"
+SOURCE = "https://www.counterextremism.com/news-and-media/eye-on-extremism"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-html = requests.get(URL, headers=headers, timeout=30).text
-soup = BeautifulSoup(html, "html.parser")
+# Get archive page
+response = requests.get(
+    SOURCE,
+    headers=headers,
+    timeout=30
+)
 
-fg = FeedGenerator()
+response.raise_for_status()
 
-fg.title("Counter Extremism Project - Eye on Extremism")
-fg.link(href=URL)
-fg.description("Daily Eye on Extremism updates")
-fg.language("en")
+soup = BeautifulSoup(response.text, "html.parser")
+
+# Create RSS
+feed = FeedGenerator()
+
+feed.title("Counter Extremism Project - Eye on Extremism")
+feed.link(href=SOURCE)
+feed.description("Daily Eye on Extremism updates")
+feed.language("en")
 
 seen = set()
 count = 0
 
+# Find roundup links
 for a in soup.find_all("a", href=True):
 
     href = a["href"]
@@ -33,45 +43,52 @@ for a in soup.find_all("a", href=True):
     if "/roundup/eye-extremism-" not in href:
         continue
 
-    link = urljoin(BASE, href)
+    url = urljoin(BASE, href)
 
-    if link in seen:
+    if url in seen:
         continue
 
-    seen.add(link)
+    seen.add(url)
 
+    # Extract title
     title = a.get_text(" ", strip=True)
-if not title:
-    continue
+
     if not title:
-        title = link.split("/")[-1].replace("-", " ").title()
+        title = url.split("/")[-1].replace("-", " ").title()
 
     # Extract date from URL
     match = re.search(
         r"eye-extremism-([a-z]+)-(\d+)-(\d{4})",
-        link
+        url
     )
 
     if match:
+
         month, day, year = match.groups()
 
-        pub_date = datetime.strptime(
-            f"{month} {day} {year}",
-            "%B %d %Y"
-        )
+        try:
+            pub_date = datetime.strptime(
+                f"{month} {day} {year}",
+                "%B %d %Y"
+            )
+
+        except ValueError:
+            pub_date = datetime.now(timezone.utc)
 
     else:
-        pub_date = datetime.utcnow()
+        pub_date = datetime.now(timezone.utc)
 
-    entry = fg.add_entry()
 
-    entry.title(title)
-    entry.link(href=link)
-    entry.guid(link, permalink=True)
-    entry.description(
+    # Create RSS item
+    item = feed.add_entry()
+
+    item.title(title)
+    item.link(href=url)
+    item.guid(url, permalink=True)
+    item.description(
         "Counter Extremism Project Eye on Extremism roundup"
     )
-    entry.pubDate(
+    item.pubDate(
         format_datetime(pub_date)
     )
 
@@ -80,4 +97,8 @@ if not title:
 
 print("FOUND ARTICLES:", count)
 
-fg.rss_file("feed.xml")
+feed.lastBuildDate(
+    format_datetime(datetime.now(timezone.utc))
+)
+
+feed.rss_file("feed.xml")
