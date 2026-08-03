@@ -4,75 +4,60 @@ from feedgen.feed import FeedGenerator
 from urllib.parse import urljoin
 from datetime import datetime, timezone
 
-SOURCE = "https://www.counterextremism.com/news-and-media"
+BASE = "https://www.counterextremism.com"
+URL = "https://www.counterextremism.com/news-and-media"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-response = requests.get(
-    SOURCE,
-    headers=headers,
-    timeout=30
-)
+r = requests.get(URL, headers=headers, timeout=30)
+r.raise_for_status()
 
-response.raise_for_status()
-
-soup = BeautifulSoup(response.text, "html.parser")
+soup = BeautifulSoup(r.text, "html.parser")
 
 feed = FeedGenerator()
 
 feed.title("Counter Extremism Project News")
-feed.link(href=SOURCE)
-feed.description(
-    "Latest news from the Counter Extremism Project"
-)
+feed.link(href=URL)
+feed.description("Latest news from the Counter Extremism Project")
 feed.language("en")
 
-seen = set()
+found = set()
 count = 0
 
-# Find all links
-for a in soup.find_all("a", href=True):
+# Find headings and nearby article links
+for tag in soup.find_all(["h1", "h2", "h3", "h4"]):
 
-    title = a.get_text(" ", strip=True)
-    href = a["href"]
+    link = tag.find("a", href=True)
 
-    url = urljoin(SOURCE, href)
-
-    # Ignore empty links
-    if not title:
+    if not link:
         continue
 
-    # Look for likely article pages
-    if not any(x in url for x in [
-        "/blog/",
-        "/news/",
-        "/press-releases/",
-        "/article/"
-    ]):
+    title = link.get_text(" ", strip=True)
+    href = link["href"]
+
+    if len(title) < 5:
         continue
 
-    if url in seen:
+    url = urljoin(BASE, href)
+
+    if url in found:
         continue
 
-    seen.add(url)
+    found.add(url)
 
     item = feed.add_entry()
     item.title(title)
     item.link(href=url)
     item.guid(url)
     item.description(
-        "Counter Extremism Project news article"
+        "Counter Extremism Project article"
     )
 
     count += 1
 
+print("FOUND ARTICLES:", count)
 
-print("Articles found:", count)
-
-feed.lastBuildDate(
-    datetime.now(timezone.utc)
-)
-
+feed.lastBuildDate(datetime.now(timezone.utc))
 feed.rss_file("feed.xml")
