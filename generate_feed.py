@@ -10,13 +10,15 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-html = requests.get(
+response = requests.get(
     SOURCE,
     headers=headers,
     timeout=30
-).text
+)
 
-soup = BeautifulSoup(html, "html.parser")
+response.raise_for_status()
+
+soup = BeautifulSoup(response.text, "html.parser")
 
 feed = FeedGenerator()
 
@@ -28,27 +30,36 @@ feed.description(
 feed.language("en")
 
 count = 0
+seen = set()
 
+# Look for all links on the page
 for a in soup.find_all("a", href=True):
 
     title = a.get_text(" ", strip=True)
-    link = urljoin(SOURCE, a["href"])
+    url = urljoin(SOURCE, a["href"])
 
-    if not title:
+    # Keep article pages only
+    if "/news/" not in url:
         continue
 
-    if "/news/" not in link:
+    if url in seen:
         continue
+
+    if len(title) < 10:
+        continue
+
+    seen.add(url)
 
     item = feed.add_entry()
     item.title(title)
-    item.link(href=link)
-    item.guid(link)
+    item.link(href=url)
+    item.guid(url)
     item.description(
-        "Counter Extremism Project news article"
+        "Counter Extremism Project article"
     )
 
     count += 1
+
 
 feed.lastBuildDate(
     datetime.now(timezone.utc)
@@ -56,4 +67,4 @@ feed.lastBuildDate(
 
 feed.rss_file("feed.xml")
 
-print("Created feed with", count, "items")
+print("Articles found:", count)
