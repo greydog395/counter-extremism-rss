@@ -13,67 +13,60 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-r = requests.get(URL, headers=headers, timeout=30)
-r.raise_for_status()
+html = requests.get(URL, headers=headers, timeout=30).text
+soup = BeautifulSoup(html, "html.parser")
 
-soup = BeautifulSoup(r.text, "html.parser")
+fg = FeedGenerator()
 
-feed = FeedGenerator()
-
-feed.title("Counter Extremism Project - Eye on Extremism")
-feed.link(href=URL)
-feed.description("Daily Eye on Extremism updates")
-feed.language("en")
+fg.title("Counter Extremism Project - Eye on Extremism")
+fg.link(href=URL)
+fg.description("Daily Eye on Extremism updates")
+fg.language("en")
 
 seen = set()
 count = 0
 
-# Find roundup headings
-for heading in soup.find_all(["h2", "h3"]):
+for a in soup.find_all("a", href=True):
 
-    title = heading.get_text(" ", strip=True)
+    href = a["href"]
 
-    if "Eye on Extremism:" not in title:
+    if "/roundup/eye-extremism-" not in href:
         continue
 
-    # Extract date from title
+    link = urljoin(BASE, href)
+
+    if link in seen:
+        continue
+
+    seen.add(link)
+
+    title = a.get_text(" ", strip=True)
+
+    if not title:
+        title = link.split("/")[-1].replace("-", " ").title()
+
+    # Extract date from URL
     match = re.search(
-        r"Eye on Extremism:\s*(.*)",
-        title
+        r"eye-extremism-([a-z]+)-(\d+)-(\d{4})",
+        link
     )
 
-    if not match:
-        continue
+    if match:
+        month, day, year = match.groups()
 
-    date_text = match.group(1)
-
-    try:
         pub_date = datetime.strptime(
-            date_text,
-            "%B %d, %Y"
+            f"{month} {day} {year}",
+            "%B %d %Y"
         )
 
-    except:
-        continue
+    else:
+        pub_date = datetime.utcnow()
 
-    # Find the nearest link
-    link = heading.find("a", href=True)
-
-    if not link:
-        continue
-
-    url = urljoin(BASE, link["href"])
-
-    if url in seen:
-        continue
-
-    seen.add(url)
-
-    entry = feed.add_entry()
+    entry = fg.add_entry()
 
     entry.title(title)
-    entry.link(href=url)
-    entry.guid(url, permalink=True)
+    entry.link(href=link)
+    entry.guid(link, permalink=True)
     entry.description(
         "Counter Extremism Project Eye on Extremism roundup"
     )
@@ -83,10 +76,7 @@ for heading in soup.find_all(["h2", "h3"]):
 
     count += 1
 
+
 print("FOUND ARTICLES:", count)
 
-feed.lastBuildDate(
-    format_datetime(datetime.utcnow())
-)
-
-feed.rss_file("feed.xml")
+fg.rss_file("feed.xml")
