@@ -29,23 +29,31 @@ feed.description(
 )
 feed.language("en")
 
-count = 0
 seen = set()
+count = 0
 
-# Look for all links on the page
+# Find all links
 for a in soup.find_all("a", href=True):
 
     title = a.get_text(" ", strip=True)
-    url = urljoin(SOURCE, a["href"])
+    href = a["href"]
 
-    # Keep article pages only
-    if "/news/" not in url:
+    url = urljoin(SOURCE, href)
+
+    # Ignore empty links
+    if not title:
+        continue
+
+    # Look for likely article pages
+    if not any(x in url for x in [
+        "/blog/",
+        "/news/",
+        "/press-releases/",
+        "/article/"
+    ]):
         continue
 
     if url in seen:
-        continue
-
-    if len(title) < 10:
         continue
 
     seen.add(url)
@@ -55,16 +63,16 @@ for a in soup.find_all("a", href=True):
     item.link(href=url)
     item.guid(url)
     item.description(
-        "Counter Extremism Project article"
+        "Counter Extremism Project news article"
     )
 
     count += 1
 
+
+print("Articles found:", count)
 
 feed.lastBuildDate(
     datetime.now(timezone.utc)
 )
 
 feed.rss_file("feed.xml")
-
-print("Articles found:", count)
