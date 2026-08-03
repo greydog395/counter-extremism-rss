@@ -44,14 +44,31 @@ for a in soup.find_all("a", href=True):
     if not title:
         title = href.split("/")[-1].replace("-", " ").title()
 
+    # Fetch the individual article
+    try:
+        article = requests.get(link, headers=headers, timeout=30)
+        article.raise_for_status()
+        article_soup = BeautifulSoup(article.text, "html.parser")
+
+        # Look for a <time> tag
+        time_tag = article_soup.find("time")
+
+        if time_tag and time_tag.has_attr("datetime"):
+            pub_date = datetime.fromisoformat(
+                time_tag["datetime"].replace("Z", "+00:00")
+            )
+        else:
+            pub_date = datetime.now(timezone.utc)
+
+    except Exception:
+        pub_date = datetime.now(timezone.utc)
+
     entry = fg.add_entry()
     entry.title(title)
     entry.link(href=link)
     entry.guid(link, permalink=True)
     entry.description(title)
-    entry.pubDate(datetime.now(timezone.utc))
-
-    count += 1
+    entry.pubDate(pub_date)
 
 print(f"FOUND ARTICLES: {count}")
 
